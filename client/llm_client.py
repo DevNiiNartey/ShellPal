@@ -1,6 +1,9 @@
-from ast import Return
+import os
 
+from dotenv import load_dotenv
 from openai import AsyncOpenAI
+
+load_dotenv()
 
 
 class LLMClient:
@@ -9,7 +12,10 @@ class LLMClient:
 
     def get_client(self) -> AsyncOpenAI:
         if self._client is None:
-            self._client = AsyncOpenAI(api_key="", base_url="")
+            self._client = AsyncOpenAI(
+                api_key=os.getenv("OPENAI_API_KEY"),
+                base_url=os.getenv("OPENAI_BASE_URL"),
+            )
         return self._client
 
     async def close(self) -> None:
