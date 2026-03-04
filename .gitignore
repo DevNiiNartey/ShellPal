@@ -188,11 +188,20 @@ cython_debug/
 #  you could uncomment the following to ignore the entire vscode folder
 # .vscode/
 
+# Zed
+#  Zed is a high-performance, multiplayer code editor. The .zed directory contains
+#  editor-specific settings and configurations.
+#  See https://zed.dev/docs/configuring-zed for more information.
+.zed/
+
 # Ruff stuff:
 .ruff_cache/
 
 # PyPI configuration file
 .pypirc
+
+# Pyright configuration file
+pyrightconfig.json
 
 # Cursor
 #  Cursor is an AI-powered code editor. `.cursorignore` specifies files/directories to
@@ -205,3 +214,8 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# OS Files
+.DS_Store
+Thumbs.db
+desktop.ini
