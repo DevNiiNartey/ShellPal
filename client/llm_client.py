@@ -1,9 +1,11 @@
 import os
+from typing import Any
 
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
+from openai.types.chat import ChatCompletion
 
-load_dotenv()
+began = load_dotenv()
 
 
 class LLMClient:
@@ -22,3 +24,32 @@ class LLMClient:
         if self._client:
             await self._client.close()
             self._client = None
+
+    async def chat_completion(
+        self, messages: list[dict[str, Any]], stream: bool = True
+    ):
+        client = self.get_client()
+        kwargs = {
+            "model": "stepfun/step-3.5-flash:free",
+            "messages": messages,
+            "stream": stream,
+        }
+        if stream:
+            await self._stream_response(client, kwargs)
+        else:
+            await self._non_stream_response(client, kwargs)
+
+    async def _stream_response(self, client: AsyncOpenAI, kwargs: dict[str, Any]):
+        pass
+
+    async def _non_stream_response(
+        self, client: AsyncOpenAI, kwargs: dict[str, Any]
+    ) -> None:
+        response: ChatCompletion = await client.chat.completions.create(**kwargs)
+        message = response.choices[0].message
+        text = None
+
+        if message.content:
+            text = message.content
+
+        print(response)
