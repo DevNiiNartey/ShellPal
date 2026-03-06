@@ -3,7 +3,7 @@ from typing import Any
 
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
-from openai.types.chat import ChatCompletion
+from client.responses import EventType, StreamEvent, TextDelta
 
 began = load_dotenv()
 
@@ -47,9 +47,9 @@ class LLMClient:
     ) -> None:
         response: ChatCompletion = await client.chat.completions.create(**kwargs)
         message = response.choices[0].message
-        text = None
+        text_delta = None
 
         if message.content:
-            text = message.content
+            text_delta = TextDelta(content=message.content)
 
         print(response)
