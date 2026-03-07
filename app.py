@@ -14,7 +14,8 @@ class LLMENTRY:
             }
         ]
 
-        await spin_up.chat_completion(input, False)
+        async for event in spin_up.chat_completion(input, False):
+            print(event)
 
 
-asyncio.run(LLMENTRY.entry())
+LLMENTRY.entry()

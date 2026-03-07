@@ -1,11 +1,12 @@
 import os
-from typing import Any
+from typing import Any, AsyncGenerator
 
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
-from client.responses import EventType, StreamEvent, TextDelta
 
-began = load_dotenv()
+from client.responses import EventType, StreamEvent, TextDelta, TokenUsage
+
+_ = load_dotenv()
 
 
 class LLMClient:
@@ -27,7 +28,7 @@ class LLMClient:
 
     async def chat_completion(
         self, messages: list[dict[str, Any]], stream: bool = True
-    ):
+    ) -> AsyncGenerator:
         client = self.get_client()
         kwargs = {
             "model": "stepfun/step-3.5-flash:free",
@@ -35,21 +36,37 @@ class LLMClient:
             "stream": stream,
         }
         if stream:
-            await self._stream_response(client, kwargs)
+            event = await self._stream_response(client, kwargs)
+            yield event
         else:
-            await self._non_stream_response(client, kwargs)
+            event = await self._non_stream_response(client, kwargs)
+            yield event
 
     async def _stream_response(self, client: AsyncOpenAI, kwargs: dict[str, Any]):
         pass
 
     async def _non_stream_response(
         self, client: AsyncOpenAI, kwargs: dict[str, Any]
-    ) -> None:
-        response: ChatCompletion = await client.chat.completions.create(**kwargs)
-        message = response.choices[0].message
+    ) -> StreamEvent:
+        response = await client.chat.completions.create(**kwargs)
+        choice = response.choices[0]
+        message = choice.message
         text_delta = None
 
         if message.content:
             text_delta = TextDelta(content=message.content)
 
-        print(response)
+        usage = None
+        if message.usage:
+            usage = TokenUsage(
+                prompt_tokens=response.usage.prompt_tokens,
+                completion_tokens=response.usage.completion_tokens,
+                total_tokens=response.usage.total_tokens,
+                cached_tokens=response.usage.prompt_tokens_usage.cached_tokens,
+            )
+        return StreamEvent(
+            type=EventType.MESSAGE_COMPLETE,
+            text_delta=text_delta,
+            finish_reason=choice.finish_reason,
+            usage=usage,
+        )
