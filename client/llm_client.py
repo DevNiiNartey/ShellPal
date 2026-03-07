@@ -57,12 +57,12 @@ class LLMClient:
             text_delta = TextDelta(content=message.content)
 
         usage = None
-        if message.usage:
+        if response.usage:
             usage = TokenUsage(
                 prompt_tokens=response.usage.prompt_tokens,
                 completion_tokens=response.usage.completion_tokens,
                 total_tokens=response.usage.total_tokens,
-                cached_tokens=response.usage.prompt_tokens_usage.cached_tokens,
+                cached_tokens=response.usage.prompt_tokens_details.cached_tokens,
             )
         return StreamEvent(
             type=EventType.MESSAGE_COMPLETE,

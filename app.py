@@ -18,4 +18,4 @@ class LLMENTRY:
             print(event)
 
 
-LLMENTRY.entry()
+asyncio.run(LLMENTRY.entry())
