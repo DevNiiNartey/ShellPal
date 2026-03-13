@@ -7,6 +7,7 @@ from client.llm_client import LLMClient
 
 class LLMENTRY:
     """Entry point class for LLM client demonstration."""
+
     @staticmethod
     async def entry():
         """Run a test chat completion and print the streaming events.
@@ -21,7 +22,7 @@ class LLMENTRY:
         input = [
             {
                 "role": "user",
-                "content": "Say this is a test",
+                "content": "Why is the sky blue?",
             }
         ]
 

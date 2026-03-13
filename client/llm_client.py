@@ -1,10 +1,11 @@
 """LLM client module for handling chat completions with OpenAI-compatible APIs."""
 
+import asyncio
 import os
 from typing import Any, AsyncGenerator
 
 from dotenv import load_dotenv
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, RateLimitError
 
 from client.responses import EventType, StreamEvent, TextDelta, TokenUsage
 
@@ -19,9 +20,11 @@ class LLMClient:
     for chat completions, supporting both streaming and non-streaming modes.
     It handles connection pooling and proper resource cleanup.
     """
+
     def __init__(self) -> None:
         """Initialize the LLM client with no active connection."""
         self._client: AsyncOpenAI | None = None
+        self._max_retries: int = 3
 
     def get_client(self) -> AsyncOpenAI:
         """Get or create the AsyncOpenAI client instance.
@@ -59,8 +62,9 @@ class LLMClient:
             StreamEvent: Events containing text deltas, finish reasons, and token usage.
         """
         client = self.get_client()
+        llm_model = os.getenv("OPENROUTER_LLM_MODEL")
         kwargs = {
-            "model": "stepfun/step-3.5-flash:free",
+            "model": llm_model,
             "messages": messages,
             "stream": stream,
         }
@@ -85,46 +89,57 @@ class LLMClient:
             StreamEvent: Events for each chunk received from the stream.
         """
         # Initiate the streaming request
-        response = await client.chat.completions.create(**kwargs)
+        for attempt in range(0, self._max_retries + 1):
+            try:
+                response = await client.chat.completions.create(**kwargs)
+                usage: TokenUsage | None = None
+                finish_reason: str | None = None
 
-        # Process each chunk from the streaming response
-        async for chunk in response:
-            usage: TokenUsage | None = None
-            finish_reason: str | None = None
+                # Process each chunk from the streaming response
+                async for chunk in response:
+                    # Extract token usage if available in this chunk
+                    if hasattr(chunk, "usage") and chunk.usage:
+                        usage = TokenUsage(
+                            prompt_tokens=chunk.usage.prompt_tokens,
+                            completion_tokens=chunk.usage.completion_tokens,
+                            total_tokens=chunk.usage.total_tokens,
+                            cached_tokens=chunk.usage.prompt_tokens_details.cached_tokens,
+                        )
 
-            # Extract token usage if available in this chunk
-            if hasattr(chunk, "usage") and chunk.usage:
-                usage = TokenUsage(
-                    prompt_tokens=chunk.usage.prompt_tokens,
-                    completion_tokens=chunk.usage.completion_tokens,
-                    total_tokens=chunk.usage.total_tokens,
-                    cached_tokens=chunk.usage.prompt_tokens_details.cached_tokens,
+                    # Skip chunks without choices (e.g., usage-only chunks)
+                    if not chunk.choices:
+                        continue
+
+                    # Extract content delta from the first choice
+                    choice = chunk.choices[0]
+                    delta = choice.delta
+
+                    # Capture finish reason when generation completes
+                    if choice.finish_reason:
+                        finish_reason = choice.finish_reason
+
+                    # Wrap the text content in a TextDelta object
+                    text_delta = None
+                    if delta.content:
+                        yield StreamEvent(
+                            type=EventType.TEXT_DELTA,
+                            text_delta=TextDelta(content=delta.content),
+                        )
+
+                yield StreamEvent(
+                    type=EventType.MESSAGE_COMPLETE,
+                    finish_reason=finish_reason,
+                    usage=usage,
                 )
-
-            # Skip chunks without choices (e.g., usage-only chunks)
-            if not chunk.choices:
-                continue
-
-            # Extract content delta from the first choice
-            choice = chunk.choices[0]
-            delta = choice.delta
-
-            # Capture finish reason when generation completes
-            if choice.finish_reason:
-                finish_reason = choice.finish_reason
-
-            # Wrap the text content in a TextDelta object
-            text_delta = None
-            if delta:
-                text_delta = TextDelta(content=delta.content)
-
-            # Yield the event with extracted data
-            yield StreamEvent(
-                type=EventType.MESSAGE_COMPLETE,
-                text_delta=text_delta,
-                finish_reason=finish_reason,
-                usage=usage,
-            )
+            except RateLimitError as e:
+                if attempt < self._max_retries:
+                    wait_time = 2**attempt
+                    await asyncio.sleep(wait_time)
+                else:
+                    yield StreamEvent(
+                        type=EventType.ERROR,
+                        error=e.message,
+                    )
 
     async def _non_stream_response(
         self, client: AsyncOpenAI, kwargs: dict[str, Any]
